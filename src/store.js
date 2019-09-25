@@ -7,9 +7,7 @@ let Vue // bind on install
 
 export class Store {
   constructor (options = {}) {
-    // Auto install if it is not done yet and `window` has `Vue`.
-    // To allow users to avoid auto-installation in some cases,
-    // this code should be placed here. See #731
+    // 浏览器环境下，new Vuex.Store 时，允许自动安装 vuex
     if (!Vue && typeof window !== 'undefined' && window.Vue) {
       install(window.Vue)
     }
@@ -26,17 +24,17 @@ export class Store {
     } = options
 
     // store internal state
-    this._committing = false
-    this._actions = Object.create(null)
-    this._actionSubscribers = []
-    this._mutations = Object.create(null)
-    this._wrappedGetters = Object.create(null)
-    this._modules = new ModuleCollection(options)
-    this._modulesNamespaceMap = Object.create(null)
-    this._subscribers = []
-    this._watcherVM = new Vue()
+    this._committing = false // 表示提交状态，作用是保证对 Vuex 中 state 的修改只能在 mutation 的回调函数中，而不能在外部随意修改 state
+    this._actions = Object.create(null) // 存放用户定义的所有的 actions
+    this._actionSubscribers = [] // 存放所有对 action 变化的订阅者
+    this._mutations = Object.create(null) // 存放用户定义所有的 mutations
+    this._wrappedGetters = Object.create(null) // 存放用户定义的所有 getters
+    this._modules = new ModuleCollection(options) // 存放用户定义的所有 modules
+    this._modulesNamespaceMap = Object.create(null) // 存放 module 和其 namespace 的对应关系
+    this._subscribers = [] // 存放所有对 mutation 变化的订阅者
+    this._watcherVM = new Vue() // 利用 vue 实例实现响应式 state / getter
 
-    // bind commit and dispatch to self
+    // 将 dispatch 与 commit 调用的 this 绑定为 store 对象本身，否则在组件内部 this.dispatch 时的 this 会指向组件的 vm
     const store = this
     const { dispatch, commit } = this
     this.dispatch = function boundDispatch (type, payload) {
@@ -51,13 +49,10 @@ export class Store {
 
     const state = this._modules.root.state
 
-    // init root module.
-    // this also recursively registers all sub-modules
-    // and collects all module getters inside this._wrappedGetters
+    // 注册模块
     installModule(this, state, [], this._modules.root)
 
-    // initialize the store vm, which is responsible for the reactivity
-    // (also registers _wrappedGetters as computed properties)
+    // 使用 Vue 内部的响应式注册 state
     resetStoreVM(this, state)
 
     // apply plugins
@@ -95,6 +90,7 @@ export class Store {
       }
       return
     }
+    // 执行 mutation 中的方法
     this._withCommit(() => {
       entry.forEach(function commitIterator (handler) {
         handler(payload)
@@ -144,6 +140,7 @@ export class Store {
       ? Promise.all(entry.map(handler => handler(payload)))
       : entry[0](payload)
 
+    // 将返回值处理成 Promise
     return result.then(res => {
       try {
         this._actionSubscribers
@@ -215,6 +212,7 @@ export class Store {
     resetStore(this, true)
   }
 
+  // _withCommit 函数通过设置 _committing 来保证只能 commit 改变状态
   _withCommit (fn) {
     const committing = this._committing
     this._committing = true
@@ -254,10 +252,11 @@ function resetStoreVM (store, state, hot) {
   store.getters = {}
   const wrappedGetters = store._wrappedGetters
   const computed = {}
+  // 通过 Object.defineProperty 方法为 store.getters 定义了 get 方法。当在组件中调用 this.$store.getters.xxx 这个方法的时候，会访问 store._vm[xxx]
   forEachValue(wrappedGetters, (fn, key) => {
-    // use computed to leverage its lazy-caching mechanism
-    // direct inline function use will lead to closure preserving oldVm.
-    // using partial to return function with only arguments preserved in closure enviroment.
+    // 重写 get 方法
+    // store.getters.xx 其实是访问了 store._vm[xx]
+    // 也就是 computed 中的属性
     computed[key] = partial(fn, store)
     Object.defineProperty(store.getters, key, {
       get: () => store._vm[key],
@@ -265,11 +264,11 @@ function resetStoreVM (store, state, hot) {
     })
   })
 
-  // use a Vue instance to store the state tree
-  // suppress warnings just in case the user has added
-  // some funky global mixins
+  // 使用 Vue 实例存储状态树。过程中暂时取消警告（Vue.config.silent）
   const silent = Vue.config.silent
   Vue.config.silent = true
+  // 当访问 store.state 时
+  // 其实是访问了 store._vm._data.$$state
   store._vm = new Vue({
     data: {
       $$state: state
@@ -283,6 +282,7 @@ function resetStoreVM (store, state, hot) {
     enableStrictMode(store)
   }
 
+  // 在新 _vm 创建后销毁 oldVm
   if (oldVm) {
     if (hot) {
       // dispatch changes in all subscribed watchers
@@ -296,10 +296,12 @@ function resetStoreVM (store, state, hot) {
 }
 
 function installModule (store, rootState, path, module, hot) {
+  // 获取 namespace，root 没有 namespace
+  // 对于 modules: { a: moduleA } 来说 namespace = 'a/'
   const isRoot = !path.length
   const namespace = store._modules.getNamespace(path)
 
-  // register in namespace map
+  // 为 namespace 缓存 module
   if (module.namespaced) {
     if (store._modulesNamespaceMap[namespace] && process.env.NODE_ENV !== 'production') {
       console.error(`[vuex] duplicate namespace ${namespace} for the namespaced module ${path.join('/')}`)
@@ -307,7 +309,9 @@ function installModule (store, rootState, path, module, hot) {
     store._modulesNamespaceMap[namespace] = module
   }
 
-  // set state
+  // 设置 state
+  // 以下逻辑就是给 store.state 添加属性
+  // 根据模块添加 state: { xxx: 1, a: {...}, b: {...} }
   if (!isRoot && !hot) {
     const parentState = getNestedState(rootState, path.slice(0, -1))
     const moduleName = path[path.length - 1]
@@ -316,6 +320,8 @@ function installModule (store, rootState, path, module, hot) {
     })
   }
 
+  // 该方法其实是在重写 dispatch 和 commit 函数
+  // 假如模块 A 中有一个名为 add 的 mutation，通过 makeLocalContext 函数，会将 add 变成 a/add，这样就可以找到模块 A 中对应函数了
   const local = module.context = makeLocalContext(store, namespace, path)
 
   module.forEachMutation((mutation, key) => {
@@ -380,8 +386,7 @@ function makeLocalContext (store, namespace, path) {
     }
   }
 
-  // getters and state object must be gotten lazily
-  // because they will be changed by vm update
+  // 延迟获取 getter / state，因为它们会根据 vm 更新
   Object.defineProperties(local, {
     getters: {
       get: noNamespace
@@ -401,15 +406,13 @@ function makeLocalGetters (store, namespace) {
 
   const splitPos = namespace.length
   Object.keys(store.getters).forEach(type => {
-    // skip if the target getter is not match this namespace
+    // 如果目标 getter 与此命名空间不匹配，则跳过
     if (type.slice(0, splitPos) !== namespace) return
 
-    // extract local getter type
+    // 提取当前地址的 getter key
     const localType = type.slice(splitPos)
 
-    // Add a port to the getters proxy.
-    // Define as getter property because
-    // we do not want to evaluate the getters in this time.
+    // 延迟获取 getter
     Object.defineProperty(gettersProxy, localType, {
       get: () => store.getters[type],
       enumerable: true

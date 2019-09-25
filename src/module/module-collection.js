@@ -3,7 +3,7 @@ import { assert, forEachValue } from '../util'
 
 export default class ModuleCollection {
   constructor (rawRootModule) {
-    // register root module (Vuex.Store options)
+    // 注册 rootModule（Vuex.Store options）
     this.register([], rawRootModule, false)
   }
 
@@ -31,14 +31,17 @@ export default class ModuleCollection {
     }
 
     const newModule = new Module(rawModule, runtime)
+    // 对于第一次初始化 ModuleCollection 时，会走第一个 if 条件，因为当前触发 register 的是 root
     if (path.length === 0) {
       this.root = newModule
     } else {
+      // 获取当前 Module 的 parent
       const parent = this.get(path.slice(0, -1))
+      // 添加 child，第一个参数是当前 Module 的 key 值
       parent.addChild(path[path.length - 1], newModule)
     }
 
-    // register nested modules
+    // 如果 rawModule 上有传入 modules 的话，就递归注册
     if (rawModule.modules) {
       forEachValue(rawModule.modules, (rawChildModule, key) => {
         this.register(path.concat(key), rawChildModule, runtime)

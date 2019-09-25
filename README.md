@@ -1,29 +1,8 @@
-# Vuex [![Build Status](https://circleci.com/gh/vuejs/vuex/tree/dev.png?style=shield)](https://circleci.com/gh/vuejs/vuex)
+# vuex-analysis
 
-> Centralized State Management for Vue.js.
+核心要点：
 
-<p align="center">
-  <img width="700px" src="https://raw.githubusercontent.com/vuejs/vuex/dev/docs/.vuepress/public/vuex.png">
-</p>
-
-- [What is Vuex?](https://vuex.vuejs.org/)
-- [Full Documentation](http://vuex.vuejs.org/)
-
-## Examples
-
-- [Counter](https://github.com/vuejs/vuex/tree/dev/examples/counter)
-- [Counter with Hot Reload](https://github.com/vuejs/vuex/tree/dev/examples/counter-hot)
-- [TodoMVC](https://github.com/vuejs/vuex/tree/dev/examples/todomvc)
-- [Flux Chat](https://github.com/vuejs/vuex/tree/dev/examples/chat)
-- [Shopping Cart](https://github.com/vuejs/vuex/tree/dev/examples/shopping-cart)
-
-Running the examples:
-
-``` bash
-$ npm install
-$ npm run dev # serve examples at localhost:8080
-```
-
-## License
-
-[MIT](http://opensource.org/licenses/MIT)
+1. 利用 Vue.mixin beforeCreate 注入 store 到根实例和子实例。
+2. Store 采用的是模块集合（ModuleCollection）和模块（Module）的设计。
+3. new Store 的核心实现为 installModule（挂载 storeOptions）和 resetStoreVM（创建私有 Vue 实例）。
+4. store 依靠一个私有的 Vue 实例来实现响应式。
